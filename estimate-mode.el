@@ -36,7 +36,6 @@
 ;;;
 (defvar estimate-source-jsons nil)
 (defvar estimate-total-number-read-only t)
-
 (defvar estimate-consumption-tax-rate 0.05)
 
 (defconst estimate-column-spec
@@ -141,7 +140,17 @@
 (defface estimate-rule-face
   '(
     (((class color) (min-colors 16) (background light))
-     (:foreground "#C33"))
+     (
+      :foreground "#D33"
+      :strike-through t
+     ))
+    )
+  "")
+
+(defface estimate-zebra-face
+  '(
+    (((class color) (min-colors 16) (background light))
+     (:background "#EEE"))
     )
   "")
 
@@ -260,10 +269,15 @@
 (defun estimate-do-insert-item (item-format)
   (save-excursion
     (set-buffer estimate-current-estimate-buffer)
-    (insert (format item-format
-                    (read-number "How mutch? "
-                                 (plist-get estimate-default-quantities
-                                            item-format))) " :\n")))
+    (beginning-of-line)
+    (let* ((end-of-line (= (point)
+                           (save-excursion (end-of-line) (point)))))
+      (insert (format item-format
+                      (read-number "How mutch? "
+                                   (plist-get estimate-default-quantities
+                                              item-format)))
+              " :"
+              (if end-of-line "" "\n")))))
 
 (defun estimate-insert-item ()
   (interactive)
@@ -315,7 +329,7 @@
      (beginning-of-line)
      (delete-region (point) (progn (end-of-line)(point)))))
 
-(defmacro estimate--with-insert-row (row align-field &rest body)
+(defmacro estimate--with-insert-row (row align-field &optional props &rest body)
   `(let ((marker   (nth 0 ,row))
          (category (nth 1 ,row))
          (item     (nth 2 ,row))
@@ -326,30 +340,33 @@
      (goto-char marker)
      (estimate--kill-line)
      (insert
-      (estimate--column category max-category-width
-                        (estimate-get-column-spec   :category ,align-field))
-      " "
-      (estimate--column item max-item-width
-                        (estimate-get-column-spec   :item ,align-field))
-      " "
-      (estimate--column price max-price-width
-                        (estimate-get-column-spec   :price ,align-field))
-      " "
-      (estimate--column quant max-quantity-width
-                        (estimate-get-column-spec   :quantity ,align-field))
-      " "
-      (estimate--column unit max-unit-width
-                        (estimate-get-column-spec   :unit ,align-field))
       (propertize
        (concat
-        " : "
-        (estimate--column subtotal max-total-width
-                          (estimate-get-column-spec :subsubtotal ,align-field)))
-       'face 'estimate-subsubtotal-face
-       'estimate-subtotal t
-       'read-only      estimate-total-number-read-only
-       'rear-nonsticky t
-       ))))
+        (estimate--column category max-category-width
+                          (estimate-get-column-spec   :category ,align-field))
+       " "
+       (estimate--column item max-item-width
+                         (estimate-get-column-spec   :item ,align-field))
+       " "
+       (estimate--column price max-price-width
+                         (estimate-get-column-spec   :price ,align-field))
+       " "
+       (estimate--column quant max-quantity-width
+                         (estimate-get-column-spec   :quantity ,align-field))
+       " "
+       (estimate--column unit max-unit-width
+                         (estimate-get-column-spec   :unit ,align-field))
+       (propertize
+        (concat
+         " : "
+         (estimate--column subtotal max-total-width
+                           (estimate-get-column-spec :subsubtotal ,align-field)))
+        'face 'estimate-subtotal-face
+        'estimate-subtotal t
+        'read-only      estimate-total-number-read-only
+        'rear-nonsticky t
+        ))
+       ,@props))))
 
 
 ;;(estimate-mode-update-total-string 5000)
@@ -498,8 +515,13 @@
         ;; update-rows
         ;;
         (save-excursion
-          (dolist (row all-rows)
-            (estimate--with-insert-row row :align)))
+          (let ((n 0))
+            (dolist (row all-rows)
+              (eval
+               `(estimate--with-insert-row
+                 row :align
+                 ,(if (< (mod n 4) 2) '('face 'estimate-zebra-face) ())))
+              (setq n (1+ n)))))
 
         ;;
         ;; update total
