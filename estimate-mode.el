@@ -44,41 +44,49 @@
     :category (
                :name "分類"
                :align right
+               :h-align center
                )
 
     :item     (
                :name "品目"
                :align left
+               :h-align center
                )
 
     :price    (
                :name "単価"
                :align right
+               :h-align center
                )
 
     :quantity (
                :name "分量"
                :align right
+               :h-align center
                )
 
     :unit     (
                :name "単位"
                :align left
+               :h-align center
                )
 
     :subtotal (
                :name "小計"
                :align right
+               :h-align center
                )
 
     :total    (
                :name "合計"
                :align right
+               :h-align center
                )
 
     :total-with-tax (
                      :name "税込合計"
                      :align right
+                     :h-align center
                      )
     
     ))
@@ -90,6 +98,8 @@
   (estimate-get-column-spec p1 :name))
 (defun estimate-get-column-align (p1)
   (estimate-get-column-spec p1 :align))
+(defun estimate-get-column-h-align (p1)
+  (estimate-get-column-spec p1 :h-align))
 
 (defun estimate-set-column-spec (prop spec)
   (dolist (field (list :category :item :price
@@ -102,6 +112,8 @@
   (estimate-set-column-spec :name opt))
 (defun estimate-set-column-align (&rest opt)
   (estimate-set-column-spec :align opt))
+(defun estimate-set-column-h-align (&rest opt)
+  (estimate-set-column-spec :h-align opt))
 
 ;;;
 ;;; faces
@@ -133,14 +145,18 @@
     )
   "")
 
+;;;
+;;; session global variables
+;;;
+(defconst estimate-source-loaded     nil)
+(defconst estimate-source            nil)
+(defconst estimate-all-items          ())
+(defconst estimate-default-quantities ())
 
 ;;;
 ;;; local variables
 ;;;
 ;;(setq estimate-total-number-read-only nil)
-(defconst estimate-source            nil)
-(defconst estimate-all-items          ())
-(defconst estimate-default-quantities ())
 (defconst estimate-rearrange-flag      t)
 (defconst estimate-with-tax            t)
 
@@ -171,13 +187,13 @@
 (defconst estimate-header-regexp
   (concat
    "^\\s *"
-   "\\([^ \t]+\\)\\s +"
-   "\\([^ \t]+\\)\\s +"
-   "\\([^ \t]+\\)\\s +"
-   "\\([^ \t]+\\)\\s +"
-   "\\([^ \t]+\\)\\s +"
+   "\\([^\000- ]+\\)\\s +"
+   "\\([^\000- ]+\\)\\s +"
+   "\\([^\000- ]+\\)\\s +"
+   "\\([^\000- ]+\\)\\s +"
+   "\\([^\000- ]+\\)\\s +"
    "\\(:\\)\\s *"
-   "\\([^ \t]+\\)\\s *$"
+   "\\([^\000- ]+\\)\\s *$"
    )
   )
 
@@ -204,6 +220,9 @@
 
 (defun estimate-load-sources ()
   (interactive)
+  (setq estimate-source    nil)
+  (setq estimate-all-items nil)
+  (setq estimate-default-quantities nil)
   (progn
     (setq estimate-source             nil
           estimate-all-items          nil
@@ -276,6 +295,7 @@
           (unit     (match-string estimate-row-pos-unit))
           (subtotal (match-string estimate-row-pos-total)))
      ,@body
+
      (setq max-category-width (max (string-width category)
                                    max-category-width))
      (setq max-item-width     (max (string-width item)
@@ -295,7 +315,7 @@
      (beginning-of-line)
      (delete-region (point) (progn (end-of-line)(point)))))
 
-(defmacro estimate--with-insert-row (row &rest body)
+(defmacro estimate--with-insert-row (row align-field &rest body)
   `(let ((marker   (nth 0 ,row))
          (category (nth 1 ,row))
          (item     (nth 2 ,row))
@@ -307,24 +327,24 @@
      (estimate--kill-line)
      (insert
       (estimate--column category max-category-width
-                        (estimate-get-column-align          :category))
+                        (estimate-get-column-spec   :category ,align-field))
       " "
       (estimate--column item max-item-width
-                        (estimate-get-column-align          :item))
+                        (estimate-get-column-spec   :item ,align-field))
       " "
       (estimate--column price max-price-width
-                        (estimate-get-column-align          :price))
+                        (estimate-get-column-spec   :price ,align-field))
       " "
       (estimate--column quant max-quantity-width
-                                 (estimate-get-column-align :quantity))
+                        (estimate-get-column-spec   :quantity ,align-field))
       " "
       (estimate--column unit max-unit-width
-                        (estimate-get-column-align          :unit))
+                        (estimate-get-column-spec   :unit ,align-field))
       (propertize
        (concat
         " : "
         (estimate--column subtotal max-total-width
-                          (estimate-get-column-align        :subsubtotal)))
+                          (estimate-get-column-spec :subsubtotal ,align-field)))
        'face 'estimate-subsubtotal-face
        'estimate-subtotal t
        'read-only      estimate-total-number-read-only
@@ -368,7 +388,8 @@
                          price
                          quantity
                          unit
-                         subtotal))))))
+                         subtotal)))
+            )))
       (next-line)
 
 
@@ -432,6 +453,7 @@
               (end-of-buffer (setq continue nil))))))
 
       (setq total-string (format "%d" total))
+
       (setq max-total-width (max (string-width total-string)
                                  max-total-width))
       (setq marker-footer (point-marker))
@@ -465,10 +487,11 @@
         ;;
         (when header-content
           (save-excursion
-            (estimate--with-insert-row header-content)
+            (estimate--with-insert-row header-content :h-align)
             (next-line)
             (estimate--kill-line)
             (insert rule)
+            (delete-char 1)
             ))
 
         ;;
@@ -476,14 +499,14 @@
         ;;
         (save-excursion
           (dolist (row all-rows)
-            (estimate--with-insert-row row)))
+            (estimate--with-insert-row row :align)))
 
         ;;
         ;; update total
         ;;
         (goto-char marker-footer)
         (beginning-of-line)
-        (delete-region (point) (save-excursion (end-of-line) (point)))
+        (estimate--kill-line)(delete-backward-char 1)
         (insert
          rule
          (propertize
@@ -498,39 +521,66 @@
           'rear-nonsticky t
           ))
         
-        );; end of updating block (let)
+        );; end of updating block (let*)
       )));; end of procedure environment (let, save-excursion, defun)
 
 
 ;;;
 ;;; major mode
 ;;;
+(defun estimate-mode-kill-line ()
+  (interactive)
+  (let ((inhibit-read-only t))
+    (call-interactively 'kill-line)))
+
+(defun estimate-mode-newline ()
+  (interactive)
+  (let ((pt (point)))
+    (if (save-excursion
+          (beginning-of-line)
+          (and (not (= pt (point)))
+               (re-search-forward estimate-row-regexp
+                                  (save-excursion
+                                    (end-of-line)(point)) t)))
+        (progn (next-line)
+               (beginning-of-line)
+               (call-interactively 'newline)
+               (goto-char pt)
+               (next-line))
+      (call-interactively 'newline))))
+
 (defconst estimate-mode-map
   (let ((km (make-sparse-keymap)))
+    (define-key km (kbd "C-j")   'estimate-mode-newline)
+    (define-key km (kbd "<RET>") 'estimate-mode-newline)
+    (define-key km (kbd "C-k")   'estimate-mode-kill-line)
     (define-key km (kbd "C-c i") 'estimate-insert-item)
     km))
 
 (defun estimate--after-change (beg end old-len)
   (if estimate-rearrange-flag
-      (progn
-        (setq estimate-rearrange-flag nil)
-        (estimate-mode-calc-and-update-total)
-        (setq estimate-rearrange-flag t)
-        ())
+      (save-excursion
+        (let ((buffer-undo-list t))
+          (setq estimate-rearrange-flag nil)
+          (estimate-mode-calc-and-update-total)
+          (setq estimate-rearrange-flag t)
+          ()))
     ()))
 
 
 (define-derived-mode estimate-mode fundamental-mode "estimate"
   ""
-  (make-variable-buffer-local 'estimate-source)
-  (make-variable-buffer-local 'estimate-all-items)
-  (make-variable-buffer-local 'estimate-default-quantities)
   (make-variable-buffer-local 'estimate-rearrange-flag)
-  
-  (estimate-load-sources)
+  (unless estimate-source-loaded
+    (setq estimate-source-loaded t)
+    (estimate-load-sources))
   (make-variable-buffer-local 'after-change-functions)
   (add-hook 'after-change-functions 'estimate--after-change)
   (estimate--after-change (point-min) (point-max) 0))
+
+(defun estimate-insert-template ()
+  (interactive)
+  )
 
 
 ;;(add-to-list 'auto-mode-alist '("\\.estimate\\'" . estimate-mode))
