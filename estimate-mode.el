@@ -258,7 +258,6 @@
     (case align
       ((left)
        (concat str (make-string sub ? )))
-
       ((center)
        (concat (make-string (/ sub 2) ? )
                str
@@ -295,7 +294,7 @@
      (beginning-of-line)
      (delete-region (point) (progn (end-of-line)(point)))))
 
-(defmacro estimate--with-insert-row (row &rest body)
+(defmacro estimate--with-insert-row (row &optional align)
   `(let ((marker   (nth 0 ,row))
          (category (nth 1 ,row))
          (item     (nth 2 ,row))
@@ -307,25 +306,31 @@
      (estimate--kill-line)
      (insert
       (estimate--column category max-category-width
-                        (estimate-get-column-align          :category))
+                        ,(if align `,align
+                           '(estimate-get-column-align          :category)))
       " "
       (estimate--column item max-item-width
-                        (estimate-get-column-align          :item))
+                        ,(if align `,align
+                           '(estimate-get-column-align          :item)))
       " "
       (estimate--column price max-price-width
-                        (estimate-get-column-align          :price))
+                        ,(if align `,align
+                           '(estimate-get-column-align          :price)))
       " "
       (estimate--column quant max-quantity-width
-                                 (estimate-get-column-align :quantity))
+                        ,(if align `,align
+                           '(estimate-get-column-align          :quantity)))
       " "
       (estimate--column unit max-unit-width
-                        (estimate-get-column-align          :unit))
+                        ,(if align `,align
+                           '(estimate-get-column-align          :unit)))
       (propertize
        (concat
         " : "
         (estimate--column subtotal max-total-width
-                          (estimate-get-column-align        :subsubtotal)))
-       'face 'estimate-subsubtotal-face
+                          ,(if align `,align
+                             '(estimate-get-column-align        :subtotal))))
+       'face 'estimate-subtotal-face
        'estimate-subtotal t
        'read-only      estimate-total-number-read-only
        'rear-nonsticky t
@@ -465,7 +470,7 @@
         ;;
         (when header-content
           (save-excursion
-            (estimate--with-insert-row header-content)
+            (estimate--with-insert-row header-content 'center)
             (next-line)
             (estimate--kill-line)
             (insert rule)
